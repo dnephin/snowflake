@@ -2,6 +2,7 @@ package snowid
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -24,9 +25,6 @@ var (
 const encodeBase58Map = "123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
 
 var decodeBase58Map [256]byte
-
-// ErrInvalidBase58 is returned by Parse when given an invalid []byte
-var ErrInvalidBase58 = errors.New("invalid base58")
 
 // initialize mapping for decoding.
 func init() {
@@ -114,7 +112,10 @@ func (n *Node) Generate() ID {
 }
 
 func (f ID) Bytes() []byte {
-	if f < 58 {
+	switch {
+	case f == 0:
+		return nil
+	case f < 58:
 		return []byte{encodeBase58Map[f]}
 	}
 
@@ -142,7 +143,7 @@ func Parse(b []byte) (ID, error) {
 
 	for i := range b {
 		if decodeBase58Map[b[i]] == 0xFF {
-			return -1, ErrInvalidBase58
+			return -1, fmt.Errorf("invalid base58: byte %d is out of range", i)
 		}
 		id = id*58 + int64(decodeBase58Map[b[i]])
 	}

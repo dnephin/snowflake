@@ -1,11 +1,13 @@
 package snowid
 
 import (
+	"strings"
 	"testing"
+
+	"gotest.tools/v3/assert"
 )
 
 func TestNewNode(t *testing.T) {
-
 	_, err := NewNode(0)
 	if err != nil {
 		t.Fatalf("error creating NewNode, %s", err)
@@ -21,7 +23,6 @@ func TestNewNode(t *testing.T) {
 // lazy check if Generate will create duplicate IDs
 // would be good to later enhance this with more smarts
 func TestGenerateDuplicateID(t *testing.T) {
-
 	node, _ := NewNode(1)
 
 	var x, y ID
@@ -36,7 +37,6 @@ func TestGenerateDuplicateID(t *testing.T) {
 
 // I feel like there's probably a better way
 func TestRace(t *testing.T) {
-
 	node, _ := NewNode(1)
 
 	go func() {
@@ -73,8 +73,7 @@ func TestBase58(t *testing.T) {
 	}
 }
 
-func BenchmarkParseBase58(b *testing.B) {
-
+func BenchmarkParse(b *testing.B) {
 	node, _ := NewNode(1)
 	sf := node.Generate()
 	b58 := sf.String()
@@ -86,8 +85,8 @@ func BenchmarkParseBase58(b *testing.B) {
 		Parse([]byte(b58))
 	}
 }
-func BenchmarkBase58(b *testing.B) {
 
+func BenchmarkBase58(b *testing.B) {
 	node, _ := NewNode(1)
 	sf := node.Generate()
 
@@ -98,8 +97,8 @@ func BenchmarkBase58(b *testing.B) {
 		_ = sf.String()
 	}
 }
-func BenchmarkGenerate(b *testing.B) {
 
+func BenchmarkGenerate(b *testing.B) {
 	node, _ := NewNode(1)
 
 	b.ReportAllocs()
@@ -111,7 +110,6 @@ func BenchmarkGenerate(b *testing.B) {
 }
 
 func BenchmarkGenerateMaxSequence(b *testing.B) {
-
 	NodeBits = 1
 	StepBits = 21
 	node, _ := NewNode(1)
@@ -124,7 +122,7 @@ func BenchmarkGenerateMaxSequence(b *testing.B) {
 	}
 }
 
-func TestParseBase58(t *testing.T) {
+func TestParse(t *testing.T) {
 	tests := []struct {
 		name    string
 		arg     string
@@ -174,4 +172,38 @@ func TestParseBase58(t *testing.T) {
 			}
 		})
 	}
+}
+
+func FuzzParse(f *testing.F) {
+	testCases := []string{
+		"self",
+		"abcdefghi",
+		"123456789",
+		"1",
+	}
+	for _, tc := range testCases {
+		f.Add(tc)
+	}
+	f.Fuzz(func(t *testing.T, original string) {
+		id, err := Parse([]byte(original))
+		if shouldError(original) {
+			assert.ErrorContains(t, err, "invalid base58", "input=%v", original)
+			return
+		}
+
+		assert.NilError(t, err, "input=%v", original)
+
+		// TODO: should a leading 1 be a valid ID?
+		normalized := strings.TrimLeft(original, "1")
+		assert.Equal(t, id.String(), normalized)
+	})
+}
+
+func shouldError(input string) bool {
+	for i := range input {
+		if !strings.Contains(encodeBase58Map, string(input[i])) {
+			return true
+		}
+	}
+	return false
 }

@@ -2,7 +2,6 @@ package snowid
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -114,9 +113,9 @@ func (n *Node) Generate() ID {
 	return r
 }
 
-func (f ID) String() string {
+func (f ID) Bytes() []byte {
 	if f < 58 {
-		return string(encodeBase58Map[f])
+		return []byte{encodeBase58Map[f]}
 	}
 
 	b := make([]byte, 0, 11)
@@ -130,7 +129,11 @@ func (f ID) String() string {
 		b[x], b[y] = b[y], b[x]
 	}
 
-	return string(b)
+	return b
+}
+
+func (f ID) String() string {
+	return string(f.Bytes())
 }
 
 // Parse parses a base58 []byte into a snowflake ID
@@ -147,24 +150,12 @@ func Parse(b []byte) (ID, error) {
 	return ID(id), nil
 }
 
-func (f ID) MarshalJSON() ([]byte, error) {
-	buff := make([]byte, 0, 22)
-	buff = append(buff, '"')
-	buff = strconv.AppendInt(buff, int64(f), 10)
-	buff = append(buff, '"')
-	return buff, nil
+func (f ID) MarshalText() ([]byte, error) {
+	return f.Bytes(), nil
 }
 
-func (f *ID) UnmarshalJSON(b []byte) error {
-	if len(b) < 3 || b[0] != '"' || b[len(b)-1] != '"' {
-		return fmt.Errorf("invalid base58 ID %q", string(b))
-	}
-
-	i, err := strconv.ParseInt(string(b[1:len(b)-1]), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	*f = ID(i)
-	return nil
+func (f *ID) UnmarshalText(b []byte) error {
+	var err error
+	*f, err = Parse(b)
+	return err
 }

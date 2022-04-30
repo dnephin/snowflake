@@ -2,8 +2,6 @@ package snowid
 
 import (
 	"testing"
-
-	"gotest.tools/v3/assert"
 )
 
 func TestNewNode(t *testing.T) {
@@ -75,46 +73,6 @@ func TestBase58(t *testing.T) {
 	}
 }
 
-func TestMarshalJSON(t *testing.T) {
-	id := ID(13587)
-	expected := "\"13587\""
-
-	bytes, err := id.MarshalJSON()
-	if err != nil {
-		t.Fatalf("Unexpected error during MarshalJSON")
-	}
-
-	if string(bytes) != expected {
-		t.Fatalf("Got %s, expected %s", string(bytes), expected)
-	}
-}
-
-func TestUnmarshalJSON(t *testing.T) {
-	testCases := []struct {
-		json        string
-		expectedID  ID
-		expectedErr string
-	}{
-		{`"13587"`, 13587, ""},
-		{`1`, 0, `invalid base58 ID "1"`},
-		{`"invalid`, 0, `invalid base58 ID "\"invalid"`},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.json, func(t *testing.T) {
-			var id ID
-			err := id.UnmarshalJSON([]byte(tc.json))
-			if tc.expectedErr == "" {
-				assert.NilError(t, err)
-				assert.Equal(t, id, tc.expectedID)
-				return
-			}
-
-			assert.ErrorContains(t, err, tc.expectedErr)
-		})
-	}
-}
-
 func BenchmarkParseBase58(b *testing.B) {
 
 	node, _ := NewNode(1)
@@ -163,33 +121,6 @@ func BenchmarkGenerateMaxSequence(b *testing.B) {
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		_ = node.Generate()
-	}
-}
-
-func BenchmarkUnmarshal(b *testing.B) {
-	// Generate the ID to unmarshal
-	node, _ := NewNode(1)
-	id := node.Generate()
-	bytes, _ := id.MarshalJSON()
-
-	var id2 ID
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		_ = id2.UnmarshalJSON(bytes)
-	}
-}
-
-func BenchmarkMarshal(b *testing.B) {
-	// Generate the ID to marshal
-	node, _ := NewNode(1)
-	id := node.Generate()
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		_, _ = id.MarshalJSON()
 	}
 }
 

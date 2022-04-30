@@ -1,5 +1,4 @@
-// Package snowflake provides a very simple Twitter snowflake generator and parser.
-package snowflake
+package snowid
 
 import (
 	"errors"

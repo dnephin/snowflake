@@ -1,13 +1,10 @@
-package snowflake
+package snowid
 
 import (
 	"testing"
 
 	"gotest.tools/v3/assert"
 )
-
-//******************************************************************************
-// General Test funcs
 
 func TestNewNode(t *testing.T) {
 
@@ -78,9 +75,6 @@ func TestBase58(t *testing.T) {
 	}
 }
 
-//******************************************************************************
-// Marshall Test Methods
-
 func TestMarshalJSON(t *testing.T) {
 	id := ID(13587)
 	expected := "\"13587\""
@@ -120,9 +114,6 @@ func TestUnmarshalJSON(t *testing.T) {
 		})
 	}
 }
-
-// ****************************************************************************
-// Benchmark Methods
 
 func BenchmarkParseBase58(b *testing.B) {
 

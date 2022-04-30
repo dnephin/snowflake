@@ -1,7 +1,6 @@
 package snowid
 
 import (
-	"strings"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -174,36 +173,53 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func FuzzParse(f *testing.F) {
+func FuzzParse_NoPanic(f *testing.F) {
 	testCases := []string{
 		"self",
 		"abcdefghi",
 		"123456789",
 		"1",
+		"gbtNrmnJkvA",
+		"11111111111",
 	}
 	for _, tc := range testCases {
 		f.Add(tc)
 	}
-	f.Fuzz(func(t *testing.T, original string) {
-		id, err := Parse([]byte(original))
-		if shouldError(original) {
-			assert.ErrorContains(t, err, "invalid base58", "input=%v", original)
+	f.Fuzz(func(t *testing.T, input string) {
+		id, err := Parse([]byte(input))
+		if id < 0 {
+			assert.ErrorContains(t, err, "invalid base58")
 			return
 		}
-
-		assert.NilError(t, err, "input=%v", original)
-
-		// TODO: should a leading 1 be a valid ID?
-		normalized := strings.TrimLeft(original, "1")
-		assert.Equal(t, id.String(), normalized)
+		assert.NilError(t, err)
 	})
 }
 
-func shouldError(input string) bool {
-	for i := range input {
-		if !strings.Contains(encodeBase58Map, string(input[i])) {
-			return true
-		}
+func FuzzParse_RoundTrip_FromInt64(f *testing.F) {
+	testCases := []int64{
+		-1, 0, 1, 2, 10,
+		2 << 15,
+		2<<15 + 1,
+		2<<15 - 1,
 	}
-	return false
+	for _, tc := range testCases {
+		f.Add(tc)
+	}
+	f.Fuzz(func(t *testing.T, original int64) {
+		id := ID(original)
+		raw, err := id.MarshalText()
+		if original < 0 {
+			assert.ErrorContains(t, err, "negative value")
+			return
+		}
+		assert.NilError(t, err)
+
+		target := new(ID)
+		err = target.UnmarshalText(raw)
+		assert.NilError(t, err)
+
+		assert.Equal(t, id, *target)
+	})
 }
+
+// TODO: FuzzParse_RoundTrip_FromString

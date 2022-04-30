@@ -1,6 +1,7 @@
 package snowid
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
@@ -139,19 +140,26 @@ func (f ID) String() string {
 
 // Parse parses a base58 []byte into a snowflake ID
 func Parse(b []byte) (ID, error) {
-	var id int64
+	b = bytes.TrimLeft(b, "1")
 
+	var id int64
 	for i := range b {
 		if decodeBase58Map[b[i]] == 0xFF {
 			return -1, fmt.Errorf("invalid base58: byte %d is out of range", i)
 		}
 		id = id*58 + int64(decodeBase58Map[b[i]])
+		if id <= 0 {
+			return -1, fmt.Errorf("invalid base58: overflow")
+		}
 	}
 
 	return ID(id), nil
 }
 
 func (f ID) MarshalText() ([]byte, error) {
+	if int64(f) < 0 {
+		return nil, fmt.Errorf("invalid base58: negative value")
+	}
 	return f.Bytes(), nil
 }
 

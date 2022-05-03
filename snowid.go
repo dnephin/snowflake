@@ -112,9 +112,10 @@ func (n *Node) Generate() ID {
 	return r
 }
 
+// Bytes returns a byte array of the base58 encoded value for this ID.
 func (f ID) Bytes() []byte {
 	switch {
-	case f == 0:
+	case f <= 0:
 		return nil
 	case f < 58:
 		return []byte{encodeBase58Map[f]}
@@ -134,26 +135,45 @@ func (f ID) Bytes() []byte {
 	return b
 }
 
+// String returns the base58 encoded value for this ID.
 func (f ID) String() string {
 	return string(f.Bytes())
 }
 
-// Parse parses a base58 []byte into a snowflake ID
+// Parse parses a base58 encoded value into an ID.
 func Parse(b []byte) (ID, error) {
-	b = bytes.TrimLeft(b, "1")
+	switch {
+	case bytes.HasPrefix(b, []byte("1")):
+		return -1, fmt.Errorf("invalid base58: ID is not in canonical form")
+	case len(b) > 11:
+		return -1, fmt.Errorf("invalid base58: too long")
+	}
 
 	var id int64
 	for i := range b {
 		if decodeBase58Map[b[i]] == 0xFF {
 			return -1, fmt.Errorf("invalid base58: byte %d is out of range", i)
 		}
-		id = id*58 + int64(decodeBase58Map[b[i]])
+
+		shifted, ok := multiplyCheckOverflow(id, 58)
+		if !ok {
+			return -1, fmt.Errorf("invalid base58: value too large")
+		}
+		id = shifted + int64(decodeBase58Map[b[i]])
 		if id <= 0 {
-			return -1, fmt.Errorf("invalid base58: overflow")
+			return -1, fmt.Errorf("invalid base58: value too large")
 		}
 	}
 
 	return ID(id), nil
+}
+
+func multiplyCheckOverflow(a, b int64) (int64, bool) {
+	if a == 0 || b == 0 || a == 1 || b == 1 {
+		return a * b, true
+	}
+	total := a * b
+	return total, total/b == a
 }
 
 func (f ID) MarshalText() ([]byte, error) {

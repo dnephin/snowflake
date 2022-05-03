@@ -1,6 +1,7 @@
 package snowid
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -54,6 +55,8 @@ func TestRace(t *testing.T) {
 }
 
 func TestBase58(t *testing.T) {
+	assert.Equal(t, len(encodeBase58Map), 58)
+
 	node, err := NewNode(0)
 	if err != nil {
 		t.Fatalf("error creating NewNode, %s", err)
@@ -123,53 +126,61 @@ func BenchmarkGenerateMaxSequence(b *testing.B) {
 }
 
 func TestParse(t *testing.T) {
-	tests := []struct {
-		name    string
-		arg     string
-		want    ID
-		wantErr bool
-	}{
+	type testCase struct {
+		base58      string
+		expected    ID
+		expectedErr string
+	}
+
+	run := func(t *testing.T, tc testCase) {
+		actual, err := Parse([]byte(tc.base58))
+		if tc.expectedErr != "" {
+			assert.ErrorContains(t, err, tc.expectedErr, "int64=%x", int64(actual))
+			return
+		}
+
+		assert.NilError(t, err)
+		assert.Equal(t, actual, tc.expected, "int64=%x", int64(actual))
+	}
+
+	testCases := []testCase{
 		{
-			name:    "ok",
-			arg:     "4jgmnx8Js8A",
-			want:    1428076403798048768,
-			wantErr: false,
+			base58:   "npL6MjP8Qfc", // 0x7fffffffffffffff
+			expected: ID(0x7fffffffffffffff),
 		},
 		{
-			name:    "0 not allowed",
-			arg:     "0jgmnx8Js8A",
-			want:    -1,
-			wantErr: true,
+			base58:      "npL6MjP8Qfd", // 0x7fffffffffffffff + 1
+			expectedErr: `invalid base58: value too large`,
 		},
 		{
-			name:    "I not allowed",
-			arg:     "Ijgmnx8Js8A",
-			want:    -1,
-			wantErr: true,
+			base58:      "JPwcyDCgEuqJPwcyDCgEuq",
+			expectedErr: `invalid base58: too long`,
 		},
 		{
-			name:    "O not allowed",
-			arg:     "Ojgmnx8Js8A",
-			want:    -1,
-			wantErr: true,
+			base58:      "JPwcyDCgEuq", //0xffffffffffffffff + 1
+			expectedErr: `invalid base58: value too large`,
 		},
 		{
-			name:    "l not allowed",
-			arg:     "ljgmnx8Js8A",
-			want:    -1,
-			wantErr: true,
+			base58:      "self",
+			expectedErr: `invalid base58: byte 2 is out of range`,
+		},
+		{
+			base58:   "4jgmnx8Js8A",
+			expected: 1428076403798048768,
+		},
+		{
+			base58:      "0jgmnx8Js8A",
+			expectedErr: `invalid base58: byte 0 is out of range`,
+		},
+		{
+			base58:      "jgmnxI8Js8A",
+			expectedErr: `invalid base58: byte 5 is out of range`,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse([]byte(tt.arg))
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("Parse() got = %v, want %v", got, tt.want)
-			}
+
+	for _, tc := range testCases {
+		t.Run(tc.base58, func(t *testing.T) {
+			run(t, tc)
 		})
 	}
 }
@@ -199,9 +210,11 @@ func FuzzParse_NoPanic(f *testing.F) {
 func FuzzParse_RoundTrip_FromInt64(f *testing.F) {
 	testCases := []int64{
 		-1, 0, 1, 2, 10,
-		2 << 15,
-		2<<15 + 1,
-		2<<15 - 1,
+		math.MaxInt8, math.MinInt8,
+		math.MaxInt16, math.MinInt16,
+		math.MaxInt32, math.MinInt32,
+		math.MaxInt64,
+		math.MinInt64,
 	}
 	for _, tc := range testCases {
 		f.Add(tc)
@@ -230,7 +243,13 @@ func FuzzParse_RoundTrip_FromString(f *testing.F) {
 		"123456789",
 		"1",
 		"gbtNrmnJkvA",
+		"dbtNrmnJkvA",
+		"btNrmnJkvA",
 		"211111111111",
+		"A1111111111",
+		"X1111111111",
+		"JR111111111",
+		"JPwcyDCgEuq",
 	}
 	for _, tc := range testCases {
 		f.Add(tc)
@@ -241,16 +260,23 @@ func FuzzParse_RoundTrip_FromString(f *testing.F) {
 			assert.ErrorContains(t, err, "invalid base58", "input=%v", original)
 			return
 		}
+		if id < 0 {
+			assert.ErrorContains(t, err, "invalid base58: value too large", "input=%v", original)
+			return
+		}
 
 		assert.NilError(t, err, "input=%v", original)
-
-		// TODO: should a leading 1 be a valid ID?
-		normalized := strings.TrimLeft(original, "1")
-		assert.Equal(t, id.String(), normalized, "input=%v", original)
+		assert.Equal(t, id.String(), original, "int64=%d", id)
 	})
 }
 
 func shouldError(input string) bool {
+	switch {
+	case strings.HasPrefix(input, "1"):
+		return true
+	case len(input) > 11:
+		return true
+	}
 	for i := range input {
 		if !strings.Contains(encodeBase58Map, string(input[i])) {
 			return true

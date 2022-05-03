@@ -1,6 +1,7 @@
 package snowid
 
 import (
+	"strings"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -222,4 +223,38 @@ func FuzzParse_RoundTrip_FromInt64(f *testing.F) {
 	})
 }
 
-// TODO: FuzzParse_RoundTrip_FromString
+func FuzzParse_RoundTrip_FromString(f *testing.F) {
+	testCases := []string{
+		"self",
+		"abcdefghi",
+		"123456789",
+		"1",
+		"gbtNrmnJkvA",
+		"211111111111",
+	}
+	for _, tc := range testCases {
+		f.Add(tc)
+	}
+	f.Fuzz(func(t *testing.T, original string) {
+		id, err := Parse([]byte(original))
+		if shouldError(original) {
+			assert.ErrorContains(t, err, "invalid base58", "input=%v", original)
+			return
+		}
+
+		assert.NilError(t, err, "input=%v", original)
+
+		// TODO: should a leading 1 be a valid ID?
+		normalized := strings.TrimLeft(original, "1")
+		assert.Equal(t, id.String(), normalized, "input=%v", original)
+	})
+}
+
+func shouldError(input string) bool {
+	for i := range input {
+		if !strings.Contains(encodeBase58Map, string(input[i])) {
+			return true
+		}
+	}
+	return false
+}

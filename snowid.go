@@ -1,7 +1,7 @@
-// Package snowflake provides a very simple Twitter snowflake generator and parser.
-package snowflake
+package snowid
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
@@ -26,9 +26,6 @@ var (
 const encodeBase58Map = "123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
 
 var decodeBase58Map [256]byte
-
-// ErrInvalidBase58 is returned by Parse when given an invalid []byte
-var ErrInvalidBase58 = errors.New("invalid base58")
 
 // initialize mapping for decoding.
 func init() {
@@ -115,57 +112,79 @@ func (n *Node) Generate() ID {
 	return r
 }
 
-func (f ID) String() string {
-	if f < 58 {
-		return string(encodeBase58Map[f])
+// Bytes returns a byte array of the base58 encoded value for this ID.
+func (id ID) Bytes() []byte {
+	switch {
+	case id <= 0:
+		return nil
+	case id < 58:
+		return []byte{encodeBase58Map[id]}
 	}
 
 	b := make([]byte, 0, 11)
-	for f >= 58 {
-		b = append(b, encodeBase58Map[f%58])
-		f /= 58
+	for id >= 58 {
+		b = append(b, encodeBase58Map[id%58])
+		id /= 58
 	}
-	b = append(b, encodeBase58Map[f])
+	b = append(b, encodeBase58Map[id])
 
 	for x, y := 0, len(b)-1; x < y; x, y = x+1, y-1 {
 		b[x], b[y] = b[y], b[x]
 	}
 
-	return string(b)
+	return b
 }
 
-// Parse parses a base58 []byte into a snowflake ID
-func Parse(b []byte) (ID, error) {
-	var id int64
+// String returns the base58 encoded value for this ID.
+func (id ID) String() string {
+	return string(id.Bytes())
+}
 
+// Parse parses a base58 encoded value into an ID.
+func Parse(b []byte) (ID, error) {
+	switch {
+	case bytes.HasPrefix(b, []byte("1")):
+		return -1, fmt.Errorf("invalid base58: ID is not in canonical form")
+	case len(b) > 11:
+		return -1, fmt.Errorf("invalid base58: too long")
+	}
+
+	var id int64
 	for i := range b {
 		if decodeBase58Map[b[i]] == 0xFF {
-			return -1, ErrInvalidBase58
+			return -1, fmt.Errorf("invalid base58: byte %d is out of range", i)
 		}
-		id = id*58 + int64(decodeBase58Map[b[i]])
+
+		shifted, ok := multiplyCheckOverflow(id, 58)
+		if !ok {
+			return -1, fmt.Errorf("invalid base58: value too large")
+		}
+		id = shifted + int64(decodeBase58Map[b[i]])
+		if id <= 0 {
+			return -1, fmt.Errorf("invalid base58: value too large")
+		}
 	}
 
 	return ID(id), nil
 }
 
-func (f ID) MarshalJSON() ([]byte, error) {
-	buff := make([]byte, 0, 22)
-	buff = append(buff, '"')
-	buff = strconv.AppendInt(buff, int64(f), 10)
-	buff = append(buff, '"')
-	return buff, nil
+func multiplyCheckOverflow(a, b int64) (int64, bool) {
+	if a == 0 || b == 0 || a == 1 || b == 1 {
+		return a * b, true
+	}
+	total := a * b
+	return total, total/b == a
 }
 
-func (f *ID) UnmarshalJSON(b []byte) error {
-	if len(b) < 3 || b[0] != '"' || b[len(b)-1] != '"' {
-		return fmt.Errorf("invalid base58 ID %q", string(b))
+func (id ID) MarshalText() ([]byte, error) {
+	if int64(id) < 0 {
+		return nil, fmt.Errorf("invalid base58: negative value")
 	}
+	return id.Bytes(), nil
+}
 
-	i, err := strconv.ParseInt(string(b[1:len(b)-1]), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	*f = ID(i)
-	return nil
+func (id *ID) UnmarshalText(b []byte) error {
+	var err error
+	*id, err = Parse(b)
+	return err
 }

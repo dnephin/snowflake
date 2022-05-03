@@ -113,20 +113,20 @@ func (n *Node) Generate() ID {
 }
 
 // Bytes returns a byte array of the base58 encoded value for this ID.
-func (f ID) Bytes() []byte {
+func (id ID) Bytes() []byte {
 	switch {
-	case f <= 0:
+	case id <= 0:
 		return nil
-	case f < 58:
-		return []byte{encodeBase58Map[f]}
+	case id < 58:
+		return []byte{encodeBase58Map[id]}
 	}
 
 	b := make([]byte, 0, 11)
-	for f >= 58 {
-		b = append(b, encodeBase58Map[f%58])
-		f /= 58
+	for id >= 58 {
+		b = append(b, encodeBase58Map[id%58])
+		id /= 58
 	}
-	b = append(b, encodeBase58Map[f])
+	b = append(b, encodeBase58Map[id])
 
 	for x, y := 0, len(b)-1; x < y; x, y = x+1, y-1 {
 		b[x], b[y] = b[y], b[x]
@@ -136,8 +136,8 @@ func (f ID) Bytes() []byte {
 }
 
 // String returns the base58 encoded value for this ID.
-func (f ID) String() string {
-	return string(f.Bytes())
+func (id ID) String() string {
+	return string(id.Bytes())
 }
 
 // Parse parses a base58 encoded value into an ID.
@@ -176,15 +176,15 @@ func multiplyCheckOverflow(a, b int64) (int64, bool) {
 	return total, total/b == a
 }
 
-func (f ID) MarshalText() ([]byte, error) {
-	if int64(f) < 0 {
+func (id ID) MarshalText() ([]byte, error) {
+	if int64(id) < 0 {
 		return nil, fmt.Errorf("invalid base58: negative value")
 	}
-	return f.Bytes(), nil
+	return id.Bytes(), nil
 }
 
-func (f *ID) UnmarshalText(b []byte) error {
+func (id *ID) UnmarshalText(b []byte) error {
 	var err error
-	*f, err = Parse(b)
+	*id, err = Parse(b)
 	return err
 }
